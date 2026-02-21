@@ -7,6 +7,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TopologyStep5Test {
+    // TopologyTestDriver validates deterministic stream logic, but it does not emulate RocksDB cache behavior
+    // exactly as a real broker-backed topology does.
+
     @Test
     fun windowedAggregationCalculatesRunningAverage() {
         val topology = buildTradeTopology(
@@ -51,12 +54,61 @@ class TopologyStep5Test {
     }
 
     @Test
-    fun tuningConfigContainsStep5Defaults() {
+    fun windowedAggregationUpdatesWindowWhenLateEventWithinGrace() {
+        val topology = buildTradeTopology(
+            inputTopic = "trades",
+            filteredOutputTopic = "trades.filtered",
+            avgOutputTopic = "trades.symbol.avg",
+            userProfileTopic = "user-profiles",
+            clickEventTopic = "click-events",
+            enrichedClickOutputTopic = "click-events.enriched",
+        )
+
+        val props = buildStreamsProperties("step5-windowed-late-event").apply {
+            put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092")
+            put(StreamsConfig.STATE_DIR_CONFIG, "build/test-state/step5-windowed-late-event")
+        }
+
+        TopologyTestDriver(topology, props).use { driver ->
+            val tradeInput = driver.createInputTopic(
+                "trades",
+                Serdes.String().serializer(),
+                JsonSerializer<Trade>(),
+            )
+
+            val avgOutput = driver.createOutputTopic(
+                "trades.symbol.avg",
+                Serdes.String().deserializer(),
+                JsonDeserializer<TradeStats>(TradeStats::class.java),
+            )
+
+            tradeInput.pipeInput("trade-1", Trade("t1", "goog", "u1", 10L, 2000.0, 5_000L), 5_000L)
+            tradeInput.pipeInput("trade-2", Trade("t2", "goog", "u1", 20L, 1000.0, 4_000L), 4_000L)
+
+            val outputs = avgOutput.readValuesToList()
+            val aggStore = driver.getWindowStore<String, TradeStats>("trade-stats-window-store")
+
+            assertTrue(outputs.isNotEmpty())
+            assertTrue(outputs.any { it.totalTrades == 1L })
+
+            val hasWindowWithCombinedTrade = aggStore.fetch("GOOG", 1L, 10_000L).use { windowedEntries ->
+                windowedEntries.asSequence().any {
+                    it.value.totalTrades == 2L && it.value.totalQuantity == 30L
+                }
+            }
+
+            assertTrue(hasWindowWithCombinedTrade)
+        }
+    }
+
+    @Test
+    fun tuningConfigContainsStep5DefaultsAndOptimization() {
         val props = buildStreamsProperties("step5-config")
 
         assertEquals("step5-config", props[StreamsConfig.APPLICATION_ID_CONFIG])
         assertEquals("localhost:9092", props[StreamsConfig.BOOTSTRAP_SERVERS_CONFIG])
         assertEquals("build/streams-state/step5-config", props[StreamsConfig.STATE_DIR_CONFIG])
+        assertEquals(StreamsConfig.OPTIMIZE, props[StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG])
         assertEquals(StreamsConfig.EXACTLY_ONCE_V2, props[StreamsConfig.PROCESSING_GUARANTEE_CONFIG])
         assertEquals("1", props[StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG].toString())
         assertEquals(

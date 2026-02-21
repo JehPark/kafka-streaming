@@ -53,6 +53,16 @@ PDF에서 설명한 가장 보편적인 디자인 패턴 두 가지를 구현합
 * **TopologyTestDriver 활용**: 실제 브로커 없이 로직을 검증하는 단위 테스트를 작성합니다.
 * **장애 복구 최적화**: 집계 상태 스토어는 `withLoggingEnabled`로 `min.compaction.lag.ms`를 지정해 체인지로그 압축 동작을 튜닝합니다. (`test/TopologyStep5Test.kt`, `defaultTradeStateLogConfig()`)
 * **스탠바이 레플리카**: EOS 기반 토폴로지에 `num.standby.replicas`를 1로 설정해 장애 조치 비용을 낮추기 위한 준비를 수행합니다. (`buildStreamsProperties`)
+* **이벤트 타임 처리**: 이벤트 타임 기반 집계에 `TimestampExtractor`를 등록하고, `TimeWindows.ofSizeAndGrace(..., grace)`로 지연 이벤트 허용 범위를 명시합니다.
+* **토폴로지 최적화**: `topology.optimization`을 `optimize`로 두어 기본 최적화 플랜을 적용합니다. (`buildStreamsProperties`)
 * **운영 테스트**: 창 집계 결과의 증가치/누적치 계산을 TopologyTestDriver로 검증하고, 핵심 스트림 설정 값이 기본값으로 반영되는지 테스트합니다. (`test/TopologyStep5Test.kt`)
+* **제약 인지**: `TopologyTestDriver`는 캐시/스토어 flush 시퀀스를 실제 운영 환경과 완전히 동일하게 재현하지 못하므로, 지연 이벤트·상태 갱신 동작은 보완적으로 운영 통합 테스트를 권장합니다.
 
 ---
+
+## 📈 6단계: 일별 변동성 Top10 파이프라인(14.3.3)
+
+* **일별 OHLC 집계**: 거래 스트림에서 심볼별로 정규화 후 24시간 이벤트 윈도우를 만들어 `open`, `close`, 거래 수량/건수를 축적합니다.
+* **모멘텀 계산**: 오픈 대비 종가 변화율(`(close - open) / open * 100`)을 `moveRate`로 계산해 상승/하락 방향을 구분합니다.
+* **방향별 Top10 유지**: `UP`, `DOWN` 각각에 대해 날짜 키별 TopN 상태를 유지하고 최신 TopN 결과를 토픽에 발행합니다.
+* **운영 테스트**: 비순차 이벤트 수신과 날짜 경계 이벤트를 포함한 TopN 갱신 동작은 `test/TopologyStep6Test.kt`로 검증합니다.
