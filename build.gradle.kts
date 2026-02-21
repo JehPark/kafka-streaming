@@ -14,6 +14,8 @@ dependencies {
     implementation("org.apache.kafka:kafka-streams:3.7.2")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.18.2")
+    testImplementation("org.apache.kafka:kafka-streams-test-utils:3.7.2")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testImplementation(kotlin("test"))
 }
 

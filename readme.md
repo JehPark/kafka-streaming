@@ -38,8 +38,10 @@ PDF에서 설명한 가장 보편적인 디자인 패턴 두 가지를 구현합
 분산 시스템에서 가장 난도가 높은 '조인'과 '정확성'을 다룹니다.
 
 * **KTable 구축**: 사용자 프로필 토픽을 `KTable`로 읽어 들여 최신 상태를 로컬에 캐싱합니다.
-* **조인 로직**: 클릭 스트림과 사용자 프로필을 `leftJoin` 하여 데이터를 확장(Enrichment)합니다.
-* **정확히 한 번(EOS) 설정**: `processing.guarantee`를 `exactly_once_v2`로 설정하여 좀 더 효율적인 정확성을 확보합니다.
+* **조인 로직**: 클릭 스트림(`click-events`)과 사용자 프로필(`user-profiles`)을 `leftJoin` 하여 데이터를 확장(Enrichment)합니다.
+* **정확히 한 번(EOS) 설정**: `processing.guarantee`를 `exactly_once_v2`로 설정(`trade-streaming-step4`)하여 정확성 보장을 적용합니다.
+* **반영 코드**: `src/Main.kt`의 `buildTradeTopology`에 `builder.table(userProfileTopic)` + `clickStream.leftJoin(profileTable, ...)`이 반영되어 있으며,
+  결과는 `click-events.enriched` 토픽으로 출력됩니다.
 * **비판적 포인트**: 외부 DB를 직접 쿼리하는 방식과 비교했을 때, 스트림-테이블 조인이 성능과 가용성 면에서 왜 유리한지 논리적으로 설명할 수 있어야 합니다.
 
 ---
@@ -49,7 +51,8 @@ PDF에서 설명한 가장 보편적인 디자인 패턴 두 가지를 구현합
 코드의 완결성을 높이고 시니어 엔지니어로서의 관점을 기르는 단계입니다.
 
 * **TopologyTestDriver 활용**: 실제 브로커 없이 로직을 검증하는 단위 테스트를 작성합니다.
-* **장애 복구 최적화**: 로컬 상태 복구 시간을 줄이기 위해 `min.compaction.lag.ms` 설정 등을 조정해 봅니다.
-* **스탠바이 레플리카**: 고가용성을 위해 `num.standby.replicas`를 설정하고 장애 시나리오를 시뮬레이션합니다.
+* **장애 복구 최적화**: 집계 상태 스토어는 `withLoggingEnabled`로 `min.compaction.lag.ms`를 지정해 체인지로그 압축 동작을 튜닝합니다. (`test/TopologyStep5Test.kt`, `defaultTradeStateLogConfig()`)
+* **스탠바이 레플리카**: EOS 기반 토폴로지에 `num.standby.replicas`를 1로 설정해 장애 조치 비용을 낮추기 위한 준비를 수행합니다. (`buildStreamsProperties`)
+* **운영 테스트**: 창 집계 결과의 증가치/누적치 계산을 TopologyTestDriver로 검증하고, 핵심 스트림 설정 값이 기본값으로 반영되는지 테스트합니다. (`test/TopologyStep5Test.kt`)
 
 ---
