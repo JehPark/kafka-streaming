@@ -5,7 +5,7 @@
 스트림 처리는 독립적인 클러스터 구성이 핵심입니다. 개발 환경에서도 운영 환경과 유사한 격리된 환경을 구축하는 것부터 시작합니다.
 
 * **Docker Compose 구성**: Zookeeper, Kafka 브로커 1대, 그리고 데이터 확인을 위한 UI 툴(예: Kafdrop)을 설정합니다.
-* **Kotlin 프로젝트 설정**: `build.gradle.kts`에 `kafka-streams-kotlin` 의존성을 추가합니다.
+* **Kotlin 프로젝트 설정**: `build.gradle.kts`에 `kafka-streams` 의존성을 추가해 스트림즈를 사용합니다.
 * **비판적 포인트**: 왜 카프카 스트림즈는 별도의 처리 클러스터(YARN, Mesos 등) 없이도 실행 가능한지, 라이브러리 방식의 장단점을 논리적으로 정리해 보세요.
 
 ---
@@ -17,6 +17,7 @@
 * **POJO/Data Class 설계**: `Trade`(주식 거래), `TradeStats`(통계), `UserProfile`(사용자 정보) 클래스를 작성합니다.
 * **Custom Serde 구현**: Jackson이나 Gson을 사용하여 Kotlin 데이터 클래스를 위한 `Serde`를 생성합니다.
 * **부족한 부분 가이드**: 단순히 라이브러리를 쓰기보다, **스키마 진화(Schema Evolution)** 관점에서 Avro나 Protobuf를 쓰지 않고 JSON을 선택했을 때의 리스크를 고민해 보는 것이 좋습니다.
+  - 정적 스키마가 없는 JSON은 `null`, 누락 필드, 타입 변형 등에서 수용 규칙이 모호해져 소비자간 호환성 문제가 자주 생깁니다. 실제 운영에서는 필드 추가/삭제 전략과 기본값 정책을 문서화해야 합니다.
 
 ---
 
